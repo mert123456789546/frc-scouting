@@ -1,0 +1,76 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=windows --project-name frc_scouting .
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: VC++ DLL'lerini ekle
+        shell: pwsh
+        run: |
+          foreach ($d in 'msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll') {
+            Copy-Item "C:\Windows\System32\$d" build\windows\x64\runner\Release\
+          }
+      - run: choco install innosetup -y
+      - run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss'
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: installer/output/FRC_Scouting_Setup.exe }
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=android --project-name frc_scouting .
+      - run: sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - run: cp build/app/outputs/flutter-apk/app-release.apk FRC_Scouting.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: FRC_Scouting.apk }
+
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: files, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with: { files: files/* }
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=web --project-name frc_scouting .
+      - run: flutter pub get
+      - run: flutter build web --release --base-href /${{ github.event.repository.name }}/app/
+      - run: mkdir site && cp -r docs/* site/ && cp -r build/web site/app
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+
+  deploy:
+    needs: web
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
