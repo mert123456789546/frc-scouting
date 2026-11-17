@@ -90,17 +90,88 @@ class TeamPage extends StatefulWidget {
   State<TeamPage> createState() => _TeamPageState();
 }
 
+class _Failure {
+  final IconData icon;
+  final String title;
+  final String message;
+  const _Failure(this.icon, this.title, this.message);
+}
+
 class _TeamPageState extends State<TeamPage> {
-  late final Future<Map<String, dynamic>> _f = _load();
+  late Future<Map<String, dynamic>> _f = _load();
+
+  void _retry() {
+    setState(() {
+      _f = _load();
+    });
+  }
 
   Future<Map<String, dynamic>> _load() async {
-    final r = await http
-        .get(Uri.parse('$workerUrl/api/team?number=${widget.number}'),
-            headers: {'X-App-Token': appToken})
-        .timeout(const Duration(seconds: 60));
-    final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
-    if (r.statusCode != 200) throw data['error'] ?? 'Bilinmeyen hata';
-    return data;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final r = await http
+            .get(Uri.parse('$workerUrl/api/team?number=${widget.number}'),
+                headers: {'X-App-Token': appToken})
+            .timeout(const Duration(seconds: 30));
+
+        Map<String, dynamic> data;
+        try {
+          data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+        } catch (_) {
+          throw const _Failure(Icons.error_outline, 'Beklenmeyen cevap',
+              'Sunucudan geçersiz bir cevap geldi. Biraz sonra tekrar deneyin.');
+        }
+
+        if (r.statusCode != 200) {
+          final msg = '${data['error'] ?? 'Bilinmeyen hata'}';
+          if (r.statusCode == 404) {
+            throw _Failure(Icons.search_off, 'Sonuç bulunamadı',
+                '$msg\nTakım numarasını kontrol edip tekrar deneyin.');
+          }
+          if (r.statusCode == 401) {
+            throw const _Failure(Icons.lock_outline, 'Erişim reddedildi',
+                'Uygulamanın erişim anahtarı geçersiz. Uygulamayı güncelleyin.');
+          }
+          throw _Failure(Icons.error_outline, 'Bir sorun oluştu', msg);
+        }
+        return data;
+      } on _Failure {
+        rethrow; // sunucunun kendi cevabı, tekrar denemeye gerek yok
+      } catch (_) {
+        if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+    throw const _Failure(Icons.wifi_off, 'İnternet bağlantısı yok',
+        'İnternetinizi kontrol edin ve tekrar deneyin.');
+  }
+
+  Widget _errorView(_Failure f) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(f.icon, size: 72, color: scheme.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(f.title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(f.message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tekrar dene'),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -110,17 +181,26 @@ class _TeamPageState extends State<TeamPage> {
           future: _f,
           builder: (context, s) {
             if (s.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Takım verileri getiriliyor...'),
+                ]),
+              );
             }
             if (s.hasError) {
-              return Center(child: Text('Hata: ${s.error}', style: const TextStyle(fontSize: 18)));
+              final e = s.error;
+              return _errorView(e is _Failure
+                  ? e
+                  : const _Failure(Icons.error_outline, 'Bir sorun oluştu',
+                      'Lütfen tekrar deneyin.'));
             }
             return _Dashboard(d: s.data!);
           },
         ),
       );
 }
-
 class _Dashboard extends StatelessWidget {
   final Map<String, dynamic> d;
   const _Dashboard({required this.d});
