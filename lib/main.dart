@@ -1,6 +1,9 @@
+import 'score_chart.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'win_loss_chart.dart';
+import 'radar_chart.dart';
 
 // deploy_api.bat'ın verdiği adresi buraya yaz (farklıysa değiştir).
 const workerUrl = 'https://frc-scouting.dincermertozer.workers.dev';
@@ -158,6 +161,29 @@ class _Dashboard extends StatelessWidget {
         _stat('Diskalifiye', f(s['dq'])),
         _stat('Sıfır skor', f(s['zero_score'])),
       ]),
+      const SizedBox(height: 16),
+        LayoutBuilder(builder: (context, c) {
+        final score = ScoreChart(matches: matches);
+        final wl = WinLossChart(
+          wins: (s['wins'] as num).toInt(),
+          losses: (s['losses'] as num).toInt(),
+          ties: (s['ties'] as num).toInt(),
+        );
+        // Geniş ekranda yan yana, dar ekranda (telefon) alt alta
+        if (c.maxWidth < 720) {
+          return Column(children: [score, const SizedBox(height: 12), wl]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: score),
+            const SizedBox(width: 12),
+            SizedBox(width: 260, child: wl),
+          ],
+        );
+      }),
+      const SizedBox(height: 16),
+      RadarChartCard(radar: d['radar'] as Map<String, dynamic>?),
       const SizedBox(height: 16),
       Card(
         child: Padding(
