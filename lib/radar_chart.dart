@@ -43,13 +43,14 @@ class RadarChartCard extends StatelessWidget {
               style: TextStyle(fontSize: 12)),
           SizedBox(
             height: 360,
-            child: hasAny
-                ? CustomPaint(
-                    size: Size.infinite,
-                    painter: _RadarPainter(labels, values, scheme.primary, scheme.onSurface),
-                  )
-                : const Center(child: Text('Radar verisi alınamadı')),
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _RadarPainter(labels, values, scheme.primary, scheme.onSurface),
+            ),
           ),
+          if (!hasAny)
+            const Text('Bu takım için henüz yeterli maç verisi yok, radar boş.',
+                style: TextStyle(fontSize: 12)),
         ]),
       ),
     );
@@ -107,14 +108,15 @@ class _RadarPainter extends CustomPainter {
         data.lineTo(p.dx, p.dy);
       }
     }
-    data.close();
-    canvas.drawPath(data, Paint()..color = accent.withValues(alpha: 0.3));
-    canvas.drawPath(
-        data,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..color = accent);
+    if (values.any((v) => v != null)) {
+      canvas.drawPath(data, Paint()..color = accent.withValues(alpha: 0.3));
+      canvas.drawPath(
+          data,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2
+            ..color = accent);
+    }
 
     for (var i = 0; i < n; i++) {
       final v = values[i];

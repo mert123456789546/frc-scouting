@@ -204,7 +204,11 @@ class _TeamPageState extends State<TeamPage> {
 class _Dashboard extends StatelessWidget {
   final Map<String, dynamic> d;
   const _Dashboard({required this.d});
-
+  String _sub(Map<String, dynamic> m) {
+    final base = '${m['score']} - ${m['opp']}${m['dq'] == true ? '  • DQ' : ''}';
+    final teams = (m['opp_teams'] as List?)?.join(', ') ?? '';
+    return teams.isEmpty ? base : '$base\nRakipler: $teams';
+  }
   Widget _stat(String label, String value) => Card(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -290,7 +294,8 @@ class _Dashboard extends StatelessWidget {
             child: Text('${m['result']}'),
           ),
           title: Text('${m['label']}  (${m['alliance'] == 'red' ? 'Kırmızı' : 'Mavi'})'),
-          subtitle: Text('${m['score']} - ${m['opp']}${m['dq'] == true ? '  • DQ' : ''}'),
+           isThreeLine: m['opp_teams'] != null,
+          subtitle: Text(_sub(m)),
         ),
     ]);
   }
